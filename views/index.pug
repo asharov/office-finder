@@ -2,4 +2,7 @@ extends layout
 
 block content
   h1= title
-  p Welcome to #{title}
+  div(id='map')
+
+block script
+  script(async defer src='https://maps.googleapis.com/maps/api/js?key=AIzaSyDCOKbVqns2k9gJkg08jaR6XLcBThHC7Es&libraries=visualization&callback=initMap')
