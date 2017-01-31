@@ -35,7 +35,7 @@ router.post('/add', function(req, res, next) {
           'longitude': result.geometry.location.lng
         };
         console.log(address);
-        MongoClient.connect(process.env.DATABASE_URL, function(err, db) {
+        MongoClient.connect(process.env.MONGODB_URI, function(err, db) {
           console.log('Database connection', err);
           if (err) {
             res.status(500).send('Database error');
