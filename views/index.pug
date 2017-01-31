@@ -3,6 +3,16 @@ extends layout
 block content
   h1= title
   div(id='map')
+  h3 Add Address
+  form(action='/add', method='post')
+    div
+      label(for='street') Street address
+        input(type='text', id='street', name='street')
+    div
+      label(for='postcode') Postal code
+        input(type='text', id='postcode', name='postcode')
+    div
+      button(type='submit') Add
 
 block script
   script(async defer src='https://maps.googleapis.com/maps/api/js?key=AIzaSyDCOKbVqns2k9gJkg08jaR6XLcBThHC7Es&libraries=visualization&callback=initMap')
