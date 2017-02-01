@@ -12,6 +12,12 @@ block content
       label(for='postcode') Postal code
         input(type='text', id='postcode', name='postcode')
     div
+      label(for='mode') Preferred commute method
+        select(id='mode', name='mode')
+          option(selected, value='transit') Public transport
+          option(value='bicycling') Bike
+          option(value='driving') Car
+    div
       button(type='submit') Add
 
 block script

@@ -12,7 +12,8 @@ router.post('/add', function(req, res, next) {
   console.log(JSON.stringify(req.body));
   const street = req.body.street;
   const postcode = req.body.postcode;
-  if (!Boolean(street) || !Boolean(postcode)) {
+  const mode = req.body.mode;
+  if (!Boolean(street) || !Boolean(postcode) || !Boolean(mode)) {
     res.status(400).send('Need values for address');
   } else {
     const geocodingUrl = 'https://maps.googleapis.com/maps/api/geocode/json?address=' +
@@ -32,7 +33,8 @@ router.post('/add', function(req, res, next) {
         const address = {
           'address': result.formatted_address,
           'latitude': result.geometry.location.lat,
-          'longitude': result.geometry.location.lng
+          'longitude': result.geometry.location.lng,
+          'mode': mode
         };
         console.log(address);
         MongoClient.connect(process.env.MONGODB_URI, function(err, db) {
