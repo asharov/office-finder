@@ -3,6 +3,7 @@ var router = express.Router();
 var MongoClient = require('mongodb').MongoClient;
 var request = require('request');
 var async = require('async');
+var zip = require('zip-array').zip;
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
@@ -54,7 +55,7 @@ router.post('/setup/stations', function(req, res, next) {
     });
   }, function(err) {
     if (err) {
-      res.status(500).message('Error setting up stations: ' + err);
+      res.status(500).send('Error setting up stations: ' + err);
     } else {
       res.status(303).redirect('/');
     }
@@ -99,11 +100,67 @@ router.post('/add', function(req, res, next) {
             addresses.updateOne({'address': address.address}, address, {'upsert': true}, function (err, result) {
               if (err) {
                 res.status(500).send('Database error: ' + err);
-              } else {
-                console.log('Update result', result.matchedCount, result.modifiedCount, result.upsertedCount);
+                db.close();
+              } else if (result.upsertedCount === 0) {
                 res.redirect(303, '/');
+                db.close();
+              } else {
+                let stationsCollection = db.collection('stations');
+                stationsCollection.find().toArray(function (err, stations) {
+                  if (err) {
+                    res.status(500).send('Database error: ' + err);
+                    db.close();
+                  } else {
+                    let monday = new Date();
+                    monday.setDate(monday.getDate() + (7 - monday.getDay()) % 7 + 1);
+                    monday.setHours(9, 0, 0, 0);
+                    let stationsString = stations.map(function(station) {
+                      return '' + station.latitude + ',' + station.longitude;
+                    }).join('|');
+                    const distanceMatrixUrl = 'https://maps.googleapis.com/maps/api/distancematrix/json?origins=' +
+                      address.latitude + ',' + address.longitude +
+                      '&destinations=' + stationsString +
+                      '&mode=' + mode +
+                      '&departure_time=' + (monday.getTime() / 1000) +
+                      '&key=' + process.env.PRIVATE_GOOGLE_API_KEY;
+                    request(distanceMatrixUrl, function(err, response, body) {
+                      if (err) {
+                        res.status(500).send('Distance calculation error: ' + err);
+                        db.close();
+                      } else if (response.statusCode !== 200) {
+                        res.status(response.statusCode).send('Distance calculation error');
+                        db.close();
+                      } else {
+                        const jsonBody = JSON.parse(body);
+                        const durations = jsonBody.rows[0].elements.map(function(element) {
+                          return element.duration.value / 3600;
+                        });
+                        const stationNames = stations.map(function(station) {
+                          return station.station;
+                        });
+                        const stationsWithDurations = zip(stationNames, durations);
+                        const addressDurations = stationsWithDurations.map(function(stationDuration) {
+                          return {
+                            'address': address.address,
+                            'station': stationDuration[0],
+                            'duration': stationDuration[1]
+                          };
+                        });
+                        console.log(addressDurations);
+                        let durationsCollection = db.collection('durations');
+                        durationsCollection.insertMany(addressDurations, function(err, result) {
+                          if (err) {
+                            res.status(500).send('Database error: ' + err);
+                          } else {
+                            res.status(303).redirect('/');
+                          }
+                          db.close();
+                        });
+                      }
+                    });
+                  }
+                });
               }
-              db.close();
             });
           }
         });
