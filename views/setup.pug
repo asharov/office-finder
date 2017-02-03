@@ -1,0 +1,10 @@
+extends layout
+
+block content
+  h1 Station Setup
+  form(action='/setup/stations', method='post')
+    div
+      label(for='stations') Station list
+        textarea(cols='40', rows='20', id='stations', name='stations')
+    div
+      button(type='submit') Set stations

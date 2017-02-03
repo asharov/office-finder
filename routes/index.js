@@ -2,10 +2,63 @@ var express = require('express');
 var router = express.Router();
 var MongoClient = require('mongodb').MongoClient;
 var request = require('request');
+var async = require('async');
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
   res.render('index', { title: 'Heat Map' });
+});
+
+router.get('/setup', function(req, res, next) {
+  res.render('setup');
+});
+
+router.post('/setup/stations', function(req, res, next) {
+  var stationNames = req.body.stations.split(/\r?\n/).slice(0, -1);
+  console.log(stationNames);
+  async.eachLimit(stationNames, 50, function(stationName, callback) {
+    const geocodingUrl = 'https://maps.googleapis.com/maps/api/geocode/json?address=' +
+      encodeURIComponent(stationName) +
+      '&components=locality:Berlin|country:DE&key=' +
+      process.env.PRIVATE_GOOGLE_API_KEY;
+    request(geocodingUrl, function(err, response, body) {
+      if (err) {
+        setTimeout(callback, 1000, err);
+      } else if (response.statusCode !== 200) {
+        setTimeout(callback, 1000, new Error(body));
+      } else {
+        const jsonBody = JSON.parse(body);
+        const result = jsonBody.results[0];
+        if (!result.types.includes('transit_station')) {
+          setTimeout(callback, 1000);
+        } else {
+          const station = {
+            'station': result.formatted_address,
+            'latitude': result.geometry.location.lat,
+            'longitude': result.geometry.location.lng
+          };
+          console.log(station);
+          MongoClient.connect(process.env.MONGODB_URI, function(err, db) {
+            if (err) {
+              setTimeout(callback, 1000, err);
+            } else {
+              let stations = db.collection('stations');
+              stations.updateOne({'station': station.station}, station, {'upsert': true}, function(err, result) {
+                setTimeout(callback, 1000, err);
+                db.close();
+              });
+            }
+          });
+        }
+      }
+    });
+  }, function(err) {
+    if (err) {
+      res.status(500).message('Error setting up stations: ' + err);
+    } else {
+      res.status(303).redirect('/');
+    }
+  });
 });
 
 router.post('/add', function(req, res, next) {
