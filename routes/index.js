@@ -7,7 +7,10 @@ var zip = require('zip-array').zip;
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
-  res.render('index', { title: 'Heat Map' });
+  res.render('index', {
+    title: 'Heat Map',
+    apiKey: process.env.PUBLIC_GOOGLE_API_KEY
+  });
 });
 
 router.get('/setup', function(req, res, next) {
