@@ -1,5 +1,6 @@
 var express = require('express');
 var router = express.Router();
+var lodash = require('lodash');
 var MongoClient = require('mongodb').MongoClient;
 var request = require('request');
 var async = require('async');
@@ -160,47 +161,55 @@ router.post('/add', function(req, res, next) {
                     let monday = new Date();
                     monday.setDate(monday.getDate() + (7 - monday.getDay()) % 7 + 1);
                     monday.setHours(9, 0, 0, 0);
-                    let stationsString = stations.map(function(station) {
-                      return '' + station.latitude + ',' + station.longitude;
-                    }).join('|');
-                    const distanceMatrixUrl = 'https://maps.googleapis.com/maps/api/distancematrix/json?origins=' +
-                      address.latitude + ',' + address.longitude +
-                      '&destinations=' + stationsString +
-                      '&mode=' + mode +
-                      '&departure_time=' + (monday.getTime() / 1000) +
-                      '&key=' + process.env.PRIVATE_GOOGLE_API_KEY;
-                    request(distanceMatrixUrl, function(err, response, body) {
-                      if (err) {
-                        res.status(500).send('Distance calculation error: ' + err);
-                        db.close();
-                      } else if (response.statusCode !== 200) {
-                        res.status(response.statusCode).send('Distance calculation error');
-                        db.close();
-                      } else {
-                        const jsonBody = JSON.parse(body);
-                        if (!jsonBody.rows[0]) {
-                          addresses.deleteOne(address, null, function(err, result) {
-                            res.status(500).send('Distance calculation error: ' + jsonBody.error_message);
-                            db.close();
-                          });
-                          return;
+                    let chunkedStations = lodash.chunk(stations, 25);
+                    async.mapLimit(chunkedStations, 1, function(stations, callback) {
+                      let stationsString = stations.map(function(station) {
+                        return '' + station.latitude + ',' + station.longitude;
+                      }).join('|');
+                      let distanceMatrixUrl = 'https://maps.googleapis.com/maps/api/distancematrix/json?origins=' +
+                        address.latitude + ',' + address.longitude +
+                        '&destinations=' + stationsString +
+                        '&mode=' + mode +
+                        '&departure_time=' + (monday.getTime() / 1000) +
+                        '&key=' + process.env.PRIVATE_GOOGLE_API_KEY;
+                      request(distanceMatrixUrl, function(err, response, body) {
+                        if (err) {
+                          setTimeout(callback, 250, err);
+                        } else if (response.statusCode !== 200) {
+                          setTimeout(callback, 250, new Error(body));
+                        } else {
+                          const jsonBody = JSON.parse(body);
+                          if (!jsonBody.rows[0]) {
+                            setTimeout(callback, 250, new Error(jsonBody.error_message));
+                          } else {
+                            const durations = jsonBody.rows[0].elements.map(function(element) {
+                              return element.duration.value / 3600;
+                            });
+                            const stationNames = stations.map(function(station) {
+                              return station.station;
+                            });
+                            const stationsWithDurations = zip(stationNames, durations);
+                            const addressDurations = stationsWithDurations.map(function(stationDuration) {
+                              return {
+                                'address': address.address,
+                                'station': stationDuration[0],
+                                'duration': stationDuration[1]
+                              };
+                            });
+                            console.log(addressDurations);
+                            setTimeout(callback, 250, null, addressDurations);
+                          }
                         }
-                        const durations = jsonBody.rows[0].elements.map(function(element) {
-                          return element.duration.value / 3600;
+                      });
+                    }, function(err, addressDurationsCollection) {
+                      if (err) {
+                        addresses.deleteOne(address, null, function(_, result) {
+                          res.status(500).send('Distance calculation error: ' + err);
+                          db.close();
                         });
-                        const stationNames = stations.map(function(station) {
-                          return station.station;
-                        });
-                        const stationsWithDurations = zip(stationNames, durations);
-                        const addressDurations = stationsWithDurations.map(function(stationDuration) {
-                          return {
-                            'address': address.address,
-                            'station': stationDuration[0],
-                            'duration': stationDuration[1]
-                          };
-                        });
-                        console.log(addressDurations);
+                      } else {
                         let durationsCollection = db.collection('durations');
+                        let addressDurations = lodash.flatten(addressDurationsCollection);
                         durationsCollection.insertMany(addressDurations, function(err, result) {
                           if (err) {
                             res.status(500).send('Database error: ' + err);
