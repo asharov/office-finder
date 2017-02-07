@@ -129,7 +129,8 @@ router.post('/add', function(req, res, next) {
           'address': result.formatted_address,
           'latitude': result.geometry.location.lat,
           'longitude': result.geometry.location.lng,
-          'mode': mode
+          'mode': mode,
+          'timestamp': new Date().getTime()
         };
         console.log(address);
         MongoClient.connect(process.env.MONGODB_URI, function(err, db) {
