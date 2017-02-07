@@ -51,7 +51,9 @@ router.get('/heatmap', function(req, res, next) {
 
 router.post('/setup/stations', function(req, res, next) {
   var stationNames = req.body.stations.split(/\r?\n/).slice(0, -1);
+  console.log('Setting up ' + stationNames.length + ' stations');
   console.log(stationNames);
+  let stationCount = 0;
   async.eachLimit(stationNames, 50, function(stationName, callback) {
     const geocodingUrl = 'https://maps.googleapis.com/maps/api/geocode/json?address=' +
       encodeURIComponent(stationName) +
@@ -81,6 +83,9 @@ router.post('/setup/stations', function(req, res, next) {
               let stations = db.collection('stations');
               stations.updateOne({'station': station.station}, station, {'upsert': true}, function(err, result) {
                 setTimeout(callback, 1000, err);
+                if (!err) {
+                  stationCount += 1;
+                }
                 db.close();
               });
             }
@@ -89,6 +94,7 @@ router.post('/setup/stations', function(req, res, next) {
       }
     });
   }, function(err) {
+    console.log('Set up ' + stationCount + ' stations');
     if (err) {
       res.status(500).send('Error setting up stations: ' + err);
     } else {
