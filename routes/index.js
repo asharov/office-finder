@@ -178,6 +178,13 @@ router.post('/add', function(req, res, next) {
                         db.close();
                       } else {
                         const jsonBody = JSON.parse(body);
+                        if (!jsonBody.rows[0]) {
+                          addresses.deleteOne(address, null, function(err, result) {
+                            res.status(500).send('Distance calculation error: ' + jsonBody.error_message);
+                            db.close();
+                          });
+                          return;
+                        }
                         const durations = jsonBody.rows[0].elements.map(function(element) {
                           return element.duration.value / 3600;
                         });
