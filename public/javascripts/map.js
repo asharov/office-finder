@@ -4,15 +4,26 @@ function initMap() {
     zoom: 13,
     center: berlin
   });
-  var heatmap = new google.maps.visualization.HeatmapLayer({
-    data: [
-      { location: new google.maps.LatLng(52.512, 13.402), weight: 2 },
-      { location: new google.maps.LatLng(52.506, 13.383), weight: 1 },
-      { location: new google.maps.LatLng(52.5, 13.4), weight: 0.5 },
-      { location: new google.maps.LatLng(52.508, 13.39), weight: 4 },
-      { location: new google.maps.LatLng(52.516, 13.41), weight: 1 }
-    ],
-    radius: 50
+  jQuery.getJSON('/heatmap', null, function(stationWeights) {
+    let data = stationWeights.map(function(stationWeight) {
+      return {
+        location: new google.maps.LatLng(stationWeight.latitude, stationWeight.longitude),
+        weight: 1 / stationWeight.weight
+      };
+    });
+    const maxWeight = data.
+      map(function(sw) { return sw.weight; }).
+      reduce(function(a, b) { return Math.max(a, b); }, 0);
+    data = data.map(function(sw) {
+      return {
+        location: sw.location,
+        weight: sw.weight * 10 / maxWeight
+      };
+    });
+    let heatmap = new google.maps.visualization.HeatmapLayer({
+      data: data,
+      radius: 50
+    });
+    heatmap.setMap(map);
   });
-  heatmap.setMap(map);
 }

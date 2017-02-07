@@ -14,6 +14,41 @@ router.get('/setup', function(req, res, next) {
   res.render('setup');
 });
 
+router.get('/heatmap', function(req, res, next) {
+  MongoClient.connect(process.env.MONGODB_URI, function(err, db) {
+    if (err) {
+      res.status(500).send('Database error: ' + err);
+    } else {
+      let stationsCollection = db.collection('stations');
+      let durationsCollection = db.collection('durations');
+      stationsCollection.find().toArray(function(err, stations) {
+        async.map(stations, function(station, callback) {
+          durationsCollection.find({'station': station.station}).toArray(function(err, durations) {
+            if (err) {
+              callback(err);
+            } else {
+              let weight = durations.map(function(duration) { return duration.duration * duration.duration; }).
+                reduce(function(a, b) { return a + b; }, 0);
+              callback(null, {
+                'latitude': station.latitude,
+                'longitude': station.longitude,
+                'weight': weight
+              });
+            }
+          });
+        }, function(err, stationWeights) {
+          if (err) {
+            res.status(500).send('Database error: ' + err);
+          } else {
+            res.status(200).json(stationWeights);
+          }
+          db.close();
+        });
+      });
+    }
+  });
+});
+
 router.post('/setup/stations', function(req, res, next) {
   var stationNames = req.body.stations.split(/\r?\n/).slice(0, -1);
   console.log(stationNames);
