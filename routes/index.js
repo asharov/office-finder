@@ -60,8 +60,9 @@ router.post('/setup/stations', function(req, res, next) {
   async.eachLimit(stationNames, 50, function(stationName, callback) {
     const geocodingUrl = 'https://maps.googleapis.com/maps/api/geocode/json?address=' +
       encodeURIComponent(stationName) +
-      '&components=locality:Berlin|country:DE&key=' +
-      process.env.PRIVATE_GOOGLE_API_KEY;
+      '&components=locality:' + process.env.OFFICE_CITY +
+      '|country:' + process.env.OFFICE_COUNTRY_CODE +
+      '&key=' + process.env.PRIVATE_GOOGLE_API_KEY;
     request(geocodingUrl, function(err, response, body) {
       if (err) {
         setTimeout(callback, 1000, err);
@@ -118,8 +119,8 @@ router.post('/add', function(req, res, next) {
       encodeURIComponent(street) +
       '&components=postal_code:' +
       encodeURIComponent(postcode) +
-      '|country=DE&key=' +
-      process.env.PRIVATE_GOOGLE_API_KEY;
+      '|country=' + process.env.OFFICE_COUNTRY_CODE +
+      '&key=' + process.env.PRIVATE_GOOGLE_API_KEY;
     request(geocodingUrl, function(err, response, body) {
       if (err) {
         res.status(500).send('Geocoding error: ' + err);

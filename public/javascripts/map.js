@@ -1,7 +1,7 @@
 function initMap() {
   var berlin = { lat: 52.508704, lng: 13.391898 };
   var map = new google.maps.Map(document.getElementById('map'), {
-    zoom: 13,
+    zoom: 12,
     center: berlin
   });
   jQuery.getJSON('/heatmap', null, function(stationWeights) {
