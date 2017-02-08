@@ -172,6 +172,7 @@ router.post('/add', function(req, res, next) {
                         '&mode=' + mode +
                         '&departure_time=' + (monday.getTime() / 1000) +
                         '&key=' + process.env.PRIVATE_GOOGLE_API_KEY;
+                      console.log(distanceMatrixUrl);
                       request(distanceMatrixUrl, function(err, response, body) {
                         if (err) {
                           setTimeout(callback, 250, err);
