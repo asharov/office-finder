@@ -1,10 +1,14 @@
 var express = require('express');
-var router = express.Router();
 var lodash = require('lodash');
 var MongoClient = require('mongodb').MongoClient;
 var request = require('request');
 var async = require('async');
 var zip = require('zip-array').zip;
+var googleMapsClient = require('@google/maps').createClient({
+  key: process.env.PRIVATE_GOOGLE_API_KEY
+});
+
+var router = express.Router();
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
@@ -59,21 +63,19 @@ router.post('/setup/stations', function(req, res, next) {
   console.log(stationNames);
   let stationCount = 0;
   async.eachLimit(stationNames, 50, function(stationName, callback) {
-    const geocodingUrl = 'https://maps.googleapis.com/maps/api/geocode/json?address=' +
-      encodeURIComponent(stationName) +
-      '&components=locality:' + process.env.OFFICE_CITY +
-      '|country:' + process.env.OFFICE_COUNTRY_CODE +
-      '&key=' + process.env.PRIVATE_GOOGLE_API_KEY;
-    request(geocodingUrl, function(err, response, body) {
+    googleMapsClient.geocode({
+      address: stationName,
+      components: {
+        locality: process.env.OFFICE_CITY,
+        country: process.env.OFFICE_COUNTRY_CODE
+      }
+    }, function(err, response) {
       if (err) {
-        setTimeout(callback, 1000, err);
-      } else if (response.statusCode !== 200) {
-        setTimeout(callback, 1000, new Error(body));
+        callback(err);
       } else {
-        const jsonBody = JSON.parse(body);
-        const result = jsonBody.results[0];
+        const result = response.json.results[0];
         if (!result.types.includes('transit_station')) {
-          setTimeout(callback, 1000);
+          callback();
         } else {
           const station = {
             'station': result.formatted_address,
@@ -83,11 +85,11 @@ router.post('/setup/stations', function(req, res, next) {
           console.log(station);
           MongoClient.connect(process.env.MONGODB_URI, function(err, db) {
             if (err) {
-              setTimeout(callback, 1000, err);
+              callback(err);
             } else {
               let stations = db.collection('stations');
               stations.updateOne({'station': station.station}, station, {'upsert': true}, function(err, result) {
-                setTimeout(callback, 1000, err);
+                callback(err);
                 if (!err) {
                   stationCount += 1;
                 }
@@ -116,20 +118,17 @@ router.post('/add', function(req, res, next) {
   if (!Boolean(street) || !Boolean(postcode) || !Boolean(mode)) {
     res.status(400).send('Need values for address');
   } else {
-    const geocodingUrl = 'https://maps.googleapis.com/maps/api/geocode/json?address=' +
-      encodeURIComponent(street) +
-      '&components=postal_code:' +
-      encodeURIComponent(postcode) +
-      '|country=' + process.env.OFFICE_COUNTRY_CODE +
-      '&key=' + process.env.PRIVATE_GOOGLE_API_KEY;
-    request(geocodingUrl, function(err, response, body) {
+    googleMapsClient.geocode({
+      address: street,
+      components: {
+        postal_code: postcode,
+        country: process.env.OFFICE_COUNTRY_CODE
+      }
+    }, function(err, response) {
       if (err) {
         res.status(500).send('Geocoding error: ' + err);
-      } else if (response.statusCode !== 200) {
-        res.status(response.statusCode).send('Geocoding error');
       } else {
-        const jsonBody = JSON.parse(body);
-        const result = jsonBody.results[0];
+        const result = response.json.results[0];
         const address = {
           'address': result.formatted_address,
           'latitude': result.geometry.location.lat,
@@ -163,27 +162,19 @@ router.post('/add', function(req, res, next) {
                     monday.setHours(9, 0, 0, 0);
                     let chunkedStations = lodash.chunk(stations, 25);
                     async.mapLimit(chunkedStations, 1, function(stations, callback) {
-                      let stationsString = stations.map(function(station) {
-                        return '' + station.latitude + ',' + station.longitude;
-                      }).join('|');
-                      let distanceMatrixUrl = 'https://maps.googleapis.com/maps/api/distancematrix/json?origins=' +
-                        address.latitude + ',' + address.longitude +
-                        '&destinations=' + stationsString +
-                        '&mode=' + mode +
-                        '&departure_time=' + (monday.getTime() / 1000) +
-                        '&key=' + process.env.PRIVATE_GOOGLE_API_KEY;
-                      console.log(distanceMatrixUrl);
-                      request(distanceMatrixUrl, function(err, response, body) {
+                      googleMapsClient.distanceMatrix({
+                        origins: [ address ],
+                        destinations: stations,
+                        mode: mode,
+                        departure_time: monday
+                      }, function(err, response) {
                         if (err) {
-                          setTimeout(callback, 250, err);
-                        } else if (response.statusCode !== 200) {
-                          setTimeout(callback, 250, new Error(body));
+                          callback(err);
                         } else {
-                          const jsonBody = JSON.parse(body);
-                          if (!jsonBody.rows[0]) {
-                            setTimeout(callback, 250, new Error(jsonBody.error_message));
+                          if (!response.json.rows[0]) {
+                            callback(new Error(response.json.error_message));
                           } else {
-                            const durations = jsonBody.rows[0].elements.map(function(element) {
+                            const durations = response.json.rows[0].elements.map(function(element) {
                               return element.duration.value / 3600;
                             });
                             const stationNames = stations.map(function(station) {
@@ -198,7 +189,7 @@ router.post('/add', function(req, res, next) {
                               };
                             });
                             console.log(addressDurations);
-                            setTimeout(callback, 250, null, addressDurations);
+                            callback(null, addressDurations);
                           }
                         }
                       });
