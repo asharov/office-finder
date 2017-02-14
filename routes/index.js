@@ -1,6 +1,5 @@
 var express = require('express');
 var lodash = require('lodash');
-var MongoClient = require('mongodb').MongoClient;
 var request = require('request');
 var async = require('async');
 var zip = require('zip-array').zip;
@@ -23,37 +22,30 @@ router.get('/setup', function(req, res, next) {
 });
 
 router.get('/heatmap', function(req, res, next) {
-  MongoClient.connect(process.env.MONGODB_URI, function(err, db) {
-    if (err) {
-      res.status(500).send('Database error: ' + err);
-    } else {
-      let stationsCollection = db.collection('stations');
-      let durationsCollection = db.collection('durations');
-      stationsCollection.find().toArray(function(err, stations) {
-        async.map(stations, function(station, callback) {
-          durationsCollection.find({'station': station.station}).toArray(function(err, durations) {
-            if (err) {
-              callback(err);
-            } else {
-              let weight = durations.map(function(duration) { return duration.duration * duration.duration; }).
-                reduce(function(a, b) { return a + b; }, 0);
-              callback(null, {
-                'latitude': station.latitude,
-                'longitude': station.longitude,
-                'weight': weight
-              });
-            }
+  let stationsCollection = req.db.collection('stations');
+  let durationsCollection = req.db.collection('durations');
+  stationsCollection.find().toArray(function(err, stations) {
+    async.map(stations, function(station, callback) {
+      durationsCollection.find({'station': station.station}).toArray(function(err, durations) {
+        if (err) {
+          callback(err);
+        } else {
+          let weight = durations.map(function(duration) { return duration.duration * duration.duration; }).
+          reduce(function(a, b) { return a + b; }, 0);
+          callback(null, {
+            'latitude': station.latitude,
+            'longitude': station.longitude,
+            'weight': weight
           });
-        }, function(err, stationWeights) {
-          if (err) {
-            res.status(500).send('Database error: ' + err);
-          } else {
-            res.status(200).json(stationWeights);
-          }
-          db.close();
-        });
+        }
       });
-    }
+    }, function(err, stationWeights) {
+      if (err) {
+        res.status(500).send('Database error: ' + err);
+      } else {
+        res.status(200).json(stationWeights);
+      }
+    });
   });
 });
 
@@ -83,18 +75,11 @@ router.post('/setup/stations', function(req, res, next) {
             'longitude': result.geometry.location.lng
           };
           console.log(station);
-          MongoClient.connect(process.env.MONGODB_URI, function(err, db) {
-            if (err) {
-              callback(err);
-            } else {
-              let stations = db.collection('stations');
-              stations.updateOne({'station': station.station}, station, {'upsert': true}, function(err, result) {
-                callback(err);
-                if (!err) {
-                  stationCount += 1;
-                }
-                db.close();
-              });
+          let stations = req.db.collection('stations');
+          stations.updateOne({'station': station.station}, station, {'upsert': true}, function(err, result) {
+            callback(err);
+            if (!err) {
+              stationCount += 1;
             }
           });
         }
@@ -137,79 +122,67 @@ router.post('/add', function(req, res, next) {
           'timestamp': new Date().getTime()
         };
         console.log(address);
-        MongoClient.connect(process.env.MONGODB_URI, function(err, db) {
-          console.log('Database connection', err);
+        let addresses = req.db.collection('addresses');
+        addresses.updateOne({'address': address.address}, address, {'upsert': true}, function (err, result) {
           if (err) {
-            res.status(500).send('Database error');
+            res.status(500).send('Database error: ' + err);
+          } else if (result.upsertedCount === 0) {
+            res.redirect(303, '/');
           } else {
-            let addresses = db.collection('addresses');
-            addresses.updateOne({'address': address.address}, address, {'upsert': true}, function (err, result) {
+            let stationsCollection = req.db.collection('stations');
+            stationsCollection.find().toArray(function (err, stations) {
               if (err) {
                 res.status(500).send('Database error: ' + err);
-                db.close();
-              } else if (result.upsertedCount === 0) {
-                res.redirect(303, '/');
-                db.close();
               } else {
-                let stationsCollection = db.collection('stations');
-                stationsCollection.find().toArray(function (err, stations) {
-                  if (err) {
-                    res.status(500).send('Database error: ' + err);
-                    db.close();
-                  } else {
-                    let monday = new Date();
-                    monday.setDate(monday.getDate() + (7 - monday.getDay()) % 7 + 1);
-                    monday.setHours(9, 0, 0, 0);
-                    let chunkedStations = lodash.chunk(stations, 25);
-                    async.mapLimit(chunkedStations, 1, function(stations, callback) {
-                      googleMapsClient.distanceMatrix({
-                        origins: [ address ],
-                        destinations: stations,
-                        mode: mode,
-                        departure_time: monday
-                      }, function(err, response) {
-                        if (err) {
-                          callback(err);
-                        } else {
-                          if (!response.json.rows[0]) {
-                            callback(new Error(response.json.error_message));
-                          } else {
-                            const durations = response.json.rows[0].elements.map(function(element) {
-                              return element.duration.value / 3600;
-                            });
-                            const stationNames = stations.map(function(station) {
-                              return station.station;
-                            });
-                            const stationsWithDurations = zip(stationNames, durations);
-                            const addressDurations = stationsWithDurations.map(function(stationDuration) {
-                              return {
-                                'address': address.address,
-                                'station': stationDuration[0],
-                                'duration': stationDuration[1]
-                              };
-                            });
-                            console.log(addressDurations);
-                            callback(null, addressDurations);
-                          }
-                        }
-                      });
-                    }, function(err, addressDurationsCollection) {
-                      if (err) {
-                        addresses.deleteOne(address, null, function(_, result) {
-                          res.status(500).send('Distance calculation error: ' + err);
-                          db.close();
-                        });
+                let monday = new Date();
+                monday.setDate(monday.getDate() + (7 - monday.getDay()) % 7 + 1);
+                monday.setHours(9, 0, 0, 0);
+                let chunkedStations = lodash.chunk(stations, 25);
+                async.mapLimit(chunkedStations, 1, function(stations, callback) {
+                  googleMapsClient.distanceMatrix({
+                    origins: [ address ],
+                    destinations: stations,
+                    mode: mode,
+                    departure_time: monday
+                  }, function(err, response) {
+                    if (err) {
+                      callback(err);
+                    } else {
+                      if (!response.json.rows[0]) {
+                        callback(new Error(response.json.error_message));
                       } else {
-                        let durationsCollection = db.collection('durations');
-                        let addressDurations = lodash.flatten(addressDurationsCollection);
-                        durationsCollection.insertMany(addressDurations, function(err, result) {
-                          if (err) {
-                            res.status(500).send('Database error: ' + err);
-                          } else {
-                            res.status(303).redirect('/');
-                          }
-                          db.close();
+                        const durations = response.json.rows[0].elements.map(function(element) {
+                          return element.duration.value / 3600;
                         });
+                        const stationNames = stations.map(function(station) {
+                          return station.station;
+                        });
+                        const stationsWithDurations = zip(stationNames, durations);
+                        const addressDurations = stationsWithDurations.map(function(stationDuration) {
+                          return {
+                            'address': address.address,
+                            'station': stationDuration[0],
+                            'duration': stationDuration[1]
+                          };
+                        });
+                        console.log(addressDurations);
+                        callback(null, addressDurations);
+                      }
+                    }
+                  });
+                }, function(err, addressDurationsCollection) {
+                  if (err) {
+                    addresses.deleteOne(address, null, function(_, result) {
+                      res.status(500).send('Distance calculation error: ' + err);
+                    });
+                  } else {
+                    let durationsCollection = req.db.collection('durations');
+                    let addressDurations = lodash.flatten(addressDurationsCollection);
+                    durationsCollection.insertMany(addressDurations, function(err, result) {
+                      if (err) {
+                        res.status(500).send('Database error: ' + err);
+                      } else {
+                        res.status(303).redirect('/');
                       }
                     });
                   }

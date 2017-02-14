@@ -12,6 +12,7 @@
     "cookie-parser": "~1.4.3",
     "debug": "~2.2.0",
     "express": "~4.14.0",
+    "express-mongo-db": "^2.0.3",
     "foreman": "^2.0.0",
     "lodash": "^4.17.4",
     "mongodb": "^2.2.22",
