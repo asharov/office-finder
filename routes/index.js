@@ -37,7 +37,9 @@ function getNextMonday() {
 router.get('/', function(req, res, next) {
   res.render('index', {
     title: 'Heat Map',
-    apiKey: process.env.PUBLIC_GOOGLE_API_KEY
+    apiKey: process.env.PUBLIC_GOOGLE_API_KEY,
+    city: process.env.OFFICE_CITY,
+    countryCode: process.env.OFFICE_COUNTRY_CODE
   });
 });
 
