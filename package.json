@@ -8,6 +8,7 @@
   "dependencies": {
     "@google/maps": "^0.3.1",
     "async": "^2.1.4",
+    "bluebird": "^3.4.7",
     "body-parser": "~1.15.2",
     "cookie-parser": "~1.4.3",
     "debug": "~2.2.0",
