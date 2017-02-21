@@ -10,13 +10,25 @@ function initMap() {
   geocoder.geocode(geocoderRequest, function(results, status) {
     if (status === google.maps.GeocoderStatus.OK) {
       let result = results[0];
-      console.log(JSON.stringify(result));
       let map = new google.maps.Map(document.getElementById('map'), {
         zoom: 12,
         center: result.geometry.location
       });
       map.fitBounds(result.geometry.viewport);
       jQuery.getJSON('/heatmap', null, function(stationWeights) {
+        let topStationWeights = stationWeights.slice(0, 10);
+        const smallestWeight = topStationWeights[0].weight;
+        const fractionDigits = smallestWeight < 1 ? 4
+          : smallestWeight < 10 ? 3
+          : smallestWeight < 100 ? 2
+          : smallestWeight < 1000 ? 1 : 0;
+        let formatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: fractionDigits });
+        let tableContent = '<tr><th>Location</th><th>Weight</th></tr>';
+        for (let stationWeight of topStationWeights) {
+          const formattedWeight = formatter.format(stationWeight.weight);
+          tableContent += '<tr><td>' + stationWeight.station + '</td><td>' + formattedWeight + '</td></tr>';
+        }
+        document.getElementById('list').innerHTML = tableContent;
         let data = stationWeights.map(function(stationWeight) {
           return {
             location: new google.maps.LatLng(stationWeight.latitude, stationWeight.longitude),

@@ -2,7 +2,6 @@ extends layout
 
 block content
   h1= title
-  div(id='map')
   h3 Add Address
   form(action='/add', method='post')
     div
@@ -19,6 +18,9 @@ block content
           option(value='driving') Car
     div
       button(type='submit') Add
+  div(id='map')
+  h3 Top Locations
+  table(id='list')
 
 block script
   script(async defer src=`https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=visualization&callback=initMap`)
