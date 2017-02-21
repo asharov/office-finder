@@ -1,7 +1,7 @@
 extends layout
 
 block content
-  h1= title
+  h2 Office Finder
   h3 Add Address
   form(action='/add', method='post')
     div
@@ -18,9 +18,15 @@ block content
           option(value='driving') Car
     div
       button(type='submit') Add
+  div(style='margin: 3em 0 1em;')
+    div
+      label(for='heatmapToggle') Heat Map
+        input(type='radio', name='displaytype', checked='checked', id='heatmapToggle')
+    div
+      label(for='weightlistToggle') Top Locations
+        input(type='radio', name='displaytype', id='weightlistToggle')
   div(id='map')
-  h3 Top Locations
-  table(id='list')
+  table(id='list', style='display: none')
 
 block script
   script(async defer src=`https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=visualization&callback=initMap`)
