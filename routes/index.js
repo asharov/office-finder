@@ -11,6 +11,14 @@ var googleMapsClient = require('@google/maps').createClient({
 
 var router = express.Router();
 
+function square(duration) {
+  return duration * duration;
+}
+
+function sum(durations) {
+  return durations.reduce(function(a, b) { return a + b; }, 0);
+}
+
 function getNextMonday() {
   return googleMapsClient.geocode({
     address: process.env.OFFICE_CITY,
@@ -57,9 +65,11 @@ router.get('/heatmap', function(req, res, next) {
           if (err) {
             callback(err);
           } else {
-            let weight = durations.map(function(duration) { return duration.duration * duration.duration; }).
-            reduce(function(a, b) { return a + b; }, 0);
+            let transformedDurations = durations.map(function(duration) { return duration.duration; }).
+              map(square);
+            let weight = sum(transformedDurations);
             callback(null, {
+              'station': station.station,
               'latitude': station.latitude,
               'longitude': station.longitude,
               'weight': weight
@@ -70,6 +80,7 @@ router.get('/heatmap', function(req, res, next) {
         if (err) {
           reject(err);
         } else {
+          stationWeights.sort(function(sw1, sw2) { return sw1.weight - sw2.weight; });
           resolve(stationWeights);
         }
       });
