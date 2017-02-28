@@ -18,7 +18,16 @@ block content
           option(value='driving') Car
     div
       button(type='submit') Add
-  div(style='margin: 3em 0 1em;')
+  div(style='margin: 3em 0 0;')
+    label(for='sumsqToggle') Sum Squares
+      input(type='radio', name='heatmapstyle', class='heatmapstyle', checked='checked', id='sumsqToggle')
+    label(for='sumexpToggle') Sum Exponential
+      input(type='radio', name='heatmapstyle', class='heatmapstyle', id='sumexpToggle')
+    label(for='minpercToggle') Min Percentile
+      input(type='radio', name='heatmapstyle', class='heatmapstyle', id='minpercToggle')
+    label(for='minmaxToggle') Min Maximum
+      input(type='radio', name='heatmapstyle', class='heatmapstyle', id='minmaxToggle')
+  div(style='margin: 1em 0 1em;')
     div
       label(for='heatmapToggle') Heat Map
         input(type='radio', name='displaytype', checked='checked', id='heatmapToggle')

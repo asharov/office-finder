@@ -9,4 +9,12 @@ jQuery(function() {
     jQuery('#map').hide();
     jQuery('#list').show();
   });
+
+  function onItemSelected(index) {
+    loadHeatmap(index);
+  }
+
+  jQuery('.heatmapstyle').each(function(index, radio) {
+    jQuery(radio).on('click', onItemSelected.bind(null, index));
+  })
 });

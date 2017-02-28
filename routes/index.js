@@ -15,9 +15,44 @@ function square(duration) {
   return duration * duration;
 }
 
-function sum(durations) {
-  return durations.reduce(function(a, b) { return a + b; }, 0);
+function expStep(duration) {
+  if (duration < 0.25) {
+    return 0;
+  } else {
+    const steps = Math.floor(4 * duration - 1);
+    let result = 1;
+    for (var i = 0; i < steps; i++) {
+      result *= 3;
+    }
+    return result;
+  }
 }
+
+function percentile(durations) {
+  const percent = 0.9;
+  let sortedDurations = lodash.sortBy(durations);
+  const index = Math.floor(percent * sortedDurations.length);
+  return sortedDurations[index];
+}
+
+const durationMappings = [
+  {
+    'transform': square,
+    'reduce': lodash.sum
+  },
+  {
+    'transform': expStep,
+    'reduce': lodash.sum
+  },
+  {
+    'transform': lodash.identity,
+    'reduce': percentile
+  },
+  {
+    'transform': lodash.identity,
+    'reduce': lodash.max
+  }
+];
 
 function getNextMonday() {
   return googleMapsClient.geocode({
@@ -55,7 +90,7 @@ router.get('/setup', function(req, res, next) {
   res.render('setup');
 });
 
-router.get('/heatmap', function(req, res, next) {
+router.get('/heatmap/:style([0123])', function(req, res, next) {
   let stationsCollection = req.db.collection('stations');
   let durationsCollection = req.db.collection('durations');
   stationsCollection.find().toArray().then(function(stations) {
@@ -65,9 +100,10 @@ router.get('/heatmap', function(req, res, next) {
           if (err) {
             callback(err);
           } else {
+            const mappings = durationMappings[req.params.style];
             let transformedDurations = durations.map(function(duration) { return duration.duration; }).
-              map(square);
-            let weight = sum(transformedDurations);
+              map(mappings.transform);
+            let weight = mappings.reduce(transformedDurations);
             callback(null, {
               'station': station.station,
               'latitude': station.latitude,
